@@ -1,0 +1,42 @@
+# Binaries
+vigil
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Test and coverage
+*.test
+coverage.out
+coverage.html
+*.coverprofile
+
+# Vendor
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+debug
+__debug_bin
+
+# Temporary
+*.tmp
+*.bak
+*.log
+
+# Maintener docs (private)
+docs/

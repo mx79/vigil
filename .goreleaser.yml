@@ -1,0 +1,52 @@
+project_name: vigil
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+
+brews:
+  - name: vigil
+    homepage: https://github.com/maxlesage/vigil
+    tap:
+      owner: maxlesage
+      name: homebrew-tap
+    description: "Generate project structure and inject into markdown files"
+
+scoops:
+  - name: vigil
+    homepage: https://github.com/maxlesage/vigil
+    description: "Generate project structure and inject into markdown files"
+    license: MIT
