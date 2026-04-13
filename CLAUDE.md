@@ -6,13 +6,20 @@
 ```
 vigil/
 
+.github/
+  workflows/
+    ci.yml
+    release.yml
+.gitignore
+.goreleaser.yml
 .vigilignore
 .vigilignore.example
 CLAUDE.md
+LICENSE
 README.md
+cmd/
 go.mod
-main.go
-test
-vigil
+test/
+  integration_test.go
 ```
 <!-- PROJECT-STRUCTURE-END *** DO NOT EDIT OR DELETE THIS SECTION *** -->
