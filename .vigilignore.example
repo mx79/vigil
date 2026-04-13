@@ -1,0 +1,14 @@
+# .vigilignore - Patterns to exclude from project structure
+#
+# Lines starting with # are comments
+# Empty lines are ignored
+#
+# Examples:
+#   node_modules      # Exclude specific directory
+#   *.log            # Exclude files by extension
+#   test/            # Exclude everything under a directory
+#   .*              # Exclude all dotfiles
+#
+# Note: Common patterns (node_modules, .git, vendor, .venv, *.pyc, etc.)
+# are already excluded by default. Use this file for project-specific
+# exclusions only.
