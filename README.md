@@ -209,4 +209,4 @@ Contributions welcome! Feel free to:
 
 ## License
 
-[MIT](LICENSE) — © 2025 Max Lesage
+[MIT](LICENSE) — © 2026 Max Lesage
