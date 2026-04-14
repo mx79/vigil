@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/maxlesage/vigil/internal/gitignore"
 )
 
 //go:embed .vigilignore.example
@@ -188,18 +190,18 @@ func run(cfg *Config) error {
 		}
 	}
 
-	// Load exclusion patterns
-	patterns, err := loadExclusionPatterns(root)
+	// Load exclusion patterns and create matcher
+	matcher, err := loadMatcher(root)
 	if err != nil {
 		return fmt.Errorf("loading patterns: %w", err)
 	}
 
 	if cfg.Verbose {
-		fmt.Printf("🔒 Exclusion patterns: %d loaded\n", len(patterns))
+		fmt.Printf("🔒 Pattern matcher loaded\n")
 	}
 
 	// Generate tree structure
-	structure, err := generateTree(root, patterns)
+	structure, err := generateTree(root, matcher)
 	if err != nil {
 		return fmt.Errorf("generating tree: %w", err)
 	}
@@ -250,7 +252,7 @@ func findTargets(root string) []string {
 	return targets
 }
 
-func loadExclusionPatterns(root string) ([]string, error) {
+func loadMatcher(root string) (*gitignore.Matcher, error) {
 	var patterns []string
 
 	if vigilPatterns, err := readFilePatterns(filepath.Join(root, ".vigilignore")); err == nil {
@@ -262,7 +264,7 @@ func loadExclusionPatterns(root string) ([]string, error) {
 	}
 
 	patterns = append(patterns, defaultExclusions...)
-	return patterns, nil
+	return gitignore.New(patterns), nil
 }
 
 func readFilePatterns(path string) ([]string, error) {
@@ -284,7 +286,7 @@ func readFilePatterns(path string) ([]string, error) {
 	return patterns, scanner.Err()
 }
 
-func generateTree(root string, patterns []string) (string, error) {
+func generateTree(root string, matcher *gitignore.Matcher) (string, error) {
 	var entries []treeEntry
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -301,7 +303,7 @@ func generateTree(root string, patterns []string) (string, error) {
 			return nil
 		}
 
-		if shouldExclude(relPath, d.IsDir(), patterns) {
+		if shouldExclude(relPath, d.IsDir(), matcher) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -338,185 +340,9 @@ func generateTree(root string, patterns []string) (string, error) {
 	return buf.String(), nil
 }
 
-func shouldExclude(path string, isDir bool, patterns []string) bool {
-	normPath := filepath.ToSlash(path)
-	parts := strings.Split(normPath, "/")
-
-	for _, pattern := range patterns {
-		// Handle negation patterns (!pattern)
-		if strings.HasPrefix(pattern, "!") {
-			continue // Negations not supported yet, skip
-		}
-
-		normPattern := filepath.ToSlash(pattern)
-
-		// Anchored pattern (starts with /) - match from root
-		if strings.HasPrefix(normPattern, "/") {
-			anchored := strings.TrimPrefix(normPattern, "/")
-			if matchPattern(normPath, anchored, isDir) {
-				return true
-			}
-			continue
-		}
-
-		// Directory pattern (ends with /)
-		if strings.HasSuffix(normPattern, "/") {
-			dirName := strings.TrimSuffix(normPattern, "/")
-			if isDir && (parts[len(parts)-1] == dirName || contains(parts, dirName)) {
-				return true
-			}
-			continue
-		}
-
-		// Try to match against full path or any parent path
-		if matchPattern(normPath, normPattern, isDir) {
-			return true
-		}
-
-		// Check basename match (for simple patterns without slashes)
-		if !strings.Contains(normPattern, "/") {
-			if parts[len(parts)-1] == normPattern || contains(parts, normPattern) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// matchPattern matches a path against a .gitignore-style pattern
-// Supports: *, ?, [abc], **/, and path/to/*.ext patterns
-func matchPattern(path, pattern string, isDir bool) bool {
-	// Handle **/ wildcard (matches any number of directories)
-	if strings.HasPrefix(pattern, "**/") {
-		suffix := pattern[3:]
-		if matchPattern(path, suffix, isDir) || matchPattern(path, "*/"+suffix, isDir) {
-			return true
-		}
-		// Check if path starts with any directory + suffix
-		parts := strings.Split(path, "/")
-		for i := 0; i < len(parts); i++ {
-			subPath := strings.Join(parts[i:], "/")
-			if matchPattern(subPath, suffix, isDir) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Handle ** wildcard in middle or end
-	if strings.Contains(pattern, "**") {
-		// Split by ** and match each part
-		parts := strings.Split(pattern, "**")
-		if len(parts) == 2 {
-			prefix := parts[0]
-			suffix := parts[1]
-
-			// Path must start with prefix and end with suffix
-			if prefix != "" && !strings.HasPrefix(path, prefix) {
-				return false
-			}
-			if suffix != "" && !strings.HasSuffix(path, suffix) {
-				return false
-			}
-
-			// Check that middle part exists (if both prefix and suffix are non-empty)
-			if prefix != "" && suffix != "" {
-				middle := path[len(prefix):]
-				if len(middle) > 0 && middle[0] == '/' {
-					middle = middle[1:]
-				}
-				return len(middle) > 0
-			}
-			return true
-		}
-	}
-
-	// Handle patterns with slashes (path-based globs like src/**/*.ts)
-	if strings.Contains(pattern, "/") {
-		// For patterns like path/to/*.ext
-		matched, err := filepath.Match(pattern, path)
-		if err == nil && matched {
-			return true
-		}
-
-		// Also try matching basename for patterns like *.ext in subdir
-		patternParts := strings.Split(pattern, "/")
-		pathParts := strings.Split(path, "/")
-
-		if len(patternParts) > 0 && len(pathParts) > 0 {
-			lastPattern := patternParts[len(patternParts)-1]
-			if strings.Contains(lastPattern, "*") {
-				if filepath.Base(path) == filepath.Base(pattern) {
-					// Check if path prefix matches
-					if len(patternParts) > 1 {
-						prefix := strings.Join(patternParts[:len(patternParts)-1], "/")
-						pathPrefix := strings.Join(pathParts[:len(pathParts)-1], "/")
-						if prefix == pathPrefix || pathPrefix == "" {
-							return true
-						}
-						// Also check if path starts with pattern prefix
-						if strings.HasPrefix(pathPrefix+"/", prefix+"/") {
-							// Check the basename pattern
-							basePattern := patternParts[len(patternParts)-1]
-							basePath := pathParts[len(pathParts)-1]
-							if matched, _ := filepath.Match(basePattern, basePath); matched {
-								return true
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Try component-by-component matching
-		if len(patternParts) <= len(pathParts) {
-			allMatch := true
-			for i := 0; i < len(patternParts); i++ {
-				pp := patternParts[i]
-				ppath := pathParts[i]
-
-				// Handle ** which can span multiple directories
-				if pp == "**" {
-					continue
-				}
-
-				matched, err := filepath.Match(pp, ppath)
-				if err != nil || !matched {
-					allMatch = false
-					break
-				}
-			}
-			if allMatch {
-				return true
-			}
-		}
-	}
-
-	// Simple pattern without path separator
-	if !strings.Contains(pattern, "/") {
-		matched, err := filepath.Match(pattern, filepath.Base(path))
-		if err == nil && matched {
-			return true
-		}
-	}
-
-	// Try direct filepath.Match for the full pattern
-	matched, err := filepath.Match(pattern, path)
-	if err == nil && matched {
-		return true
-	}
-
-	return false
-}
-
-func contains(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
+func shouldExclude(path string, isDir bool, matcher *gitignore.Matcher) bool {
+	// Use the gitignore matcher for proper .gitignore-style pattern matching
+	return matcher.Match(gitignore.ToSlash(path), isDir)
 }
 
 func injectStructure(targetPath, structure, projectName string) error {
