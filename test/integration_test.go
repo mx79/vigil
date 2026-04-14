@@ -55,6 +55,10 @@ func TestVigilBasicUsage(t *testing.T) {
 	}
 
 	outputStr := string(output)
+	// Check for the new informative message
+	if !strings.Contains(outputStr, "IMPORTANT: This tree shows files and directories") {
+		t.Errorf("Output should contain IMPORTANT message, got:\n%s", outputStr)
+	}
 	// Check that tree contains expected files
 	if !strings.Contains(outputStr, "main.go") {
 		t.Errorf("Output should contain main.go, got:\n%s", outputStr)

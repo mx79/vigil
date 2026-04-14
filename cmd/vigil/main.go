@@ -210,7 +210,9 @@ func run(cfg *Config) error {
 	}
 
 	if cfg.DryRun {
-		fmt.Printf("\n```\n%s\n```\n", structure)
+		fmt.Printf("\n# Project Structure\n\n")
+		fmt.Printf("IMPORTANT: This tree shows files and directories that are NOT excluded by .vigilignore patterns. Some files or directories may be intentionally hidden from this view. Do not rely solely on this structure - actively explore and search for files as needed, since important code may exist in locations not shown here.\n\n")
+		fmt.Printf("## Project: %s\n\n```\n%s\n```\n", projectName, structure)
 		return nil
 	}
 
@@ -541,13 +543,13 @@ func injectStructure(targetPath, structure, projectName string) error {
 			endIdx += endOfLineIdx + 1
 		}
 
-		newSection = fmt.Sprintf("%s\n\n## Project: %s\n\n```\n%s\n```\n%s\n",
+		newSection = fmt.Sprintf("%s\n\n# Project Structure\n\nIMPORTANT: This tree shows files and directories that are NOT excluded by .vigilignore patterns. Some files or directories may be intentionally hidden from this view. Do not rely solely on this structure - actively explore and search for files as needed, since important code may exist in locations not shown here.\n\n## Project: %s\n\n```\n%s\n```\n%s\n",
 			markerStart, projectName, strings.TrimSpace(structure), markerEnd)
 
 		contentStr = contentStr[:startIdx] + newSection + contentStr[endIdx:]
 	} else {
 		// Append to end
-		newSection = fmt.Sprintf("\n%s\n\n## Project: %s\n\n```\n%s\n```\n%s\n",
+		newSection = fmt.Sprintf("\n%s\n\n# Project Structure\n\nIMPORTANT: This tree shows files and directories that are NOT excluded by .vigilignore patterns. Some files or directories may be intentionally hidden from this view. Do not rely solely on this structure - actively explore and search for files as needed, since important code may exist in locations not shown here.\n\n## Project: %s\n\n```\n%s\n```\n%s\n",
 			markerStart, projectName, strings.TrimSpace(structure), markerEnd)
 		contentStr = strings.TrimRight(contentStr, "\n") + newSection
 	}
