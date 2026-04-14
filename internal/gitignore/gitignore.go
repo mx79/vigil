@@ -98,10 +98,10 @@ func (m *Matcher) matchUnanchored(pathParts []string, p *pattern, isDir bool) bo
 
 // pattern represents a parsed .gitignore pattern.
 type pattern struct {
-	pattern string
-	anchored bool    // starts with /
-	dirOnly  bool    // ends with /
-	negate   bool    // starts with !
+	pattern  string
+	anchored bool // starts with /
+	dirOnly  bool // ends with /
+	negate   bool // starts with !
 }
 
 // parsePattern parses a single .gitignore pattern string.
