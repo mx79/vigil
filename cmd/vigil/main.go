@@ -341,16 +341,23 @@ func shouldExclude(path string, isDir bool, patterns []string) bool {
 	parts := strings.Split(normPath, "/")
 
 	for _, pattern := range patterns {
+		// Handle negation patterns (!pattern)
+		if strings.HasPrefix(pattern, "!") {
+			continue // Negations not supported yet, skip
+		}
+
 		normPattern := filepath.ToSlash(pattern)
 
+		// Anchored pattern (starts with /) - match from root
 		if strings.HasPrefix(normPattern, "/") {
 			anchored := strings.TrimPrefix(normPattern, "/")
-			if strings.HasPrefix(normPath, anchored) {
+			if matchPattern(normPath, anchored, isDir) {
 				return true
 			}
 			continue
 		}
 
+		// Directory pattern (ends with /)
 		if strings.HasSuffix(normPattern, "/") {
 			dirName := strings.TrimSuffix(normPattern, "/")
 			if isDir && (parts[len(parts)-1] == dirName || contains(parts, dirName)) {
@@ -359,38 +366,146 @@ func shouldExclude(path string, isDir bool, patterns []string) bool {
 			continue
 		}
 
-		if strings.Contains(normPattern, "*") {
-			if matchesGlob(parts[len(parts)-1], normPattern) {
-				return true
-			}
-			for _, part := range parts {
-				if matchesGlob(part, normPattern) {
-					return true
-				}
-			}
-			continue
+		// Try to match against full path or any parent path
+		if matchPattern(normPath, normPattern, isDir) {
+			return true
 		}
 
-		if parts[len(parts)-1] == normPattern || contains(parts, normPattern) {
-			return true
+		// Check basename match (for simple patterns without slashes)
+		if !strings.Contains(normPattern, "/") {
+			if parts[len(parts)-1] == normPattern || contains(parts, normPattern) {
+				return true
+			}
 		}
 	}
 
 	return false
 }
 
-func matchesGlob(name, pattern string) bool {
-	if strings.HasPrefix(pattern, "*.") {
-		suffix := pattern[1:]
-		return strings.HasSuffix(name, suffix)
+// matchPattern matches a path against a .gitignore-style pattern
+// Supports: *, ?, [abc], **/, and path/to/*.ext patterns
+func matchPattern(path, pattern string, isDir bool) bool {
+	// Handle **/ wildcard (matches any number of directories)
+	if strings.HasPrefix(pattern, "**/") {
+		suffix := pattern[3:]
+		if matchPattern(path, suffix, isDir) || matchPattern(path, "*/"+suffix, isDir) {
+			return true
+		}
+		// Check if path starts with any directory + suffix
+		parts := strings.Split(path, "/")
+		for i := 0; i < len(parts); i++ {
+			subPath := strings.Join(parts[i:], "/")
+			if matchPattern(subPath, suffix, isDir) {
+				return true
+			}
+		}
+		return false
 	}
-	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(name, pattern[1:])
+
+	// Handle ** wildcard in middle or end
+	if strings.Contains(pattern, "**") {
+		// Split by ** and match each part
+		parts := strings.Split(pattern, "**")
+		if len(parts) == 2 {
+			prefix := parts[0]
+			suffix := parts[1]
+
+			// Path must start with prefix and end with suffix
+			if prefix != "" && !strings.HasPrefix(path, prefix) {
+				return false
+			}
+			if suffix != "" && !strings.HasSuffix(path, suffix) {
+				return false
+			}
+
+			// Check that middle part exists (if both prefix and suffix are non-empty)
+			if prefix != "" && suffix != "" {
+				middle := path[len(prefix):]
+				if len(middle) > 0 && middle[0] == '/' {
+					middle = middle[1:]
+				}
+				return len(middle) > 0
+			}
+			return true
+		}
 	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(name, pattern[:len(pattern)-1])
+
+	// Handle patterns with slashes (path-based globs like src/**/*.ts)
+	if strings.Contains(pattern, "/") {
+		// For patterns like path/to/*.ext
+		matched, err := filepath.Match(pattern, path)
+		if err == nil && matched {
+			return true
+		}
+
+		// Also try matching basename for patterns like *.ext in subdir
+		patternParts := strings.Split(pattern, "/")
+		pathParts := strings.Split(path, "/")
+
+		if len(patternParts) > 0 && len(pathParts) > 0 {
+			lastPattern := patternParts[len(patternParts)-1]
+			if strings.Contains(lastPattern, "*") {
+				if filepath.Base(path) == filepath.Base(pattern) {
+					// Check if path prefix matches
+					if len(patternParts) > 1 {
+						prefix := strings.Join(patternParts[:len(patternParts)-1], "/")
+						pathPrefix := strings.Join(pathParts[:len(pathParts)-1], "/")
+						if prefix == pathPrefix || pathPrefix == "" {
+							return true
+						}
+						// Also check if path starts with pattern prefix
+						if strings.HasPrefix(pathPrefix+"/", prefix+"/") {
+							// Check the basename pattern
+							basePattern := patternParts[len(patternParts)-1]
+							basePath := pathParts[len(pathParts)-1]
+							if matched, _ := filepath.Match(basePattern, basePath); matched {
+								return true
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Try component-by-component matching
+		if len(patternParts) <= len(pathParts) {
+			allMatch := true
+			for i := 0; i < len(patternParts); i++ {
+				pp := patternParts[i]
+				ppath := pathParts[i]
+
+				// Handle ** which can span multiple directories
+				if pp == "**" {
+					continue
+				}
+
+				matched, err := filepath.Match(pp, ppath)
+				if err != nil || !matched {
+					allMatch = false
+					break
+				}
+			}
+			if allMatch {
+				return true
+			}
+		}
 	}
-	return name == pattern
+
+	// Simple pattern without path separator
+	if !strings.Contains(pattern, "/") {
+		matched, err := filepath.Match(pattern, filepath.Base(path))
+		if err == nil && matched {
+			return true
+		}
+	}
+
+	// Try direct filepath.Match for the full pattern
+	matched, err := filepath.Match(pattern, path)
+	if err == nil && matched {
+		return true
+	}
+
+	return false
 }
 
 func contains(slice []string, s string) bool {
