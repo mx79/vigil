@@ -3,7 +3,6 @@ project_name: vigil
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
 
 builds:
   - env:
@@ -36,17 +35,3 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^ci:'
-
-brews:
-  - name: vigil
-    homepage: https://github.com/maxlesage/vigil
-    tap:
-      owner: maxlesage
-      name: homebrew-tap
-    description: "Generate project structure and inject into markdown files"
-
-scoops:
-  - name: vigil
-    homepage: https://github.com/maxlesage/vigil
-    description: "Generate project structure and inject into markdown files"
-    license: MIT
